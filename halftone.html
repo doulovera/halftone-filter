@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Newsprint Halftone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Old+Standard+TT:wght@400;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3f0e8;
+    --ink: #141414;
+    --muted: #6b675e;
+    --rule: #141414;
+    --panel: #fbf9f4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+  }
+  header {
+    text-align: center;
+    padding: 28px 16px 14px;
+    border-bottom: 3px double var(--rule);
+    margin: 0 16px;
+  }
+  h1 {
+    font-family: "Old Standard TT", Georgia, serif;
+    font-weight: 700;
+    font-size: clamp(30px, 6vw, 56px);
+    letter-spacing: 0.02em;
+    margin: 0;
+    line-height: 1;
+  }
+  header p { margin: 8px 0 0; color: var(--muted); }
+  main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 24px;
+    padding: 24px 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  aside {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    padding: 16px;
+    align-self: start;
+    position: sticky;
+    top: 16px;
+  }
+  .drop {
+    border: 1.5px dashed var(--ink);
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: background .15s;
+  }
+  .drop:hover, .drop.over { background: #e9e4d6; }
+  .drop strong { display: block; font-family: "Old Standard TT", serif; font-size: 18px; margin-bottom: 4px; }
+  .drop span { color: var(--muted); font-size: 12px; }
+  .ctl { margin-bottom: 12px; }
+  .ctl label { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .ctl output { color: var(--muted); }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+  input[type=text] {
+    width: 100%; font: 700 16px "Old Standard TT", Georgia, serif;
+    padding: 7px 8px; border: 1px solid var(--ink); background: #fff; color: var(--ink);
+  }
+  .check { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; }
+  .check input { accent-color: var(--ink); }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 14px 0; }
+  .row { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    font: inherit;
+    padding: 9px 10px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+  }
+  button.ghost { background: transparent; color: var(--ink); }
+  button:disabled { opacity: .4; cursor: default; }
+  .stage {
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--rule);
+    background: #fff;
+    padding: 24px;
+  }
+  canvas { max-width: 100%; height: auto; display: block; image-rendering: auto; }
+  .empty { color: var(--muted); text-align: center; font-family: "Old Standard TT", serif; font-size: 20px; }
+  .compare { display: none; }
+  .stage.showing-original canvas#out { display: none; }
+  .stage.showing-original .compare { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>THE NEWSPRINT HALFTONE</h1>
+  <p>Drop a photo. Get a crunchy black-and-white newspaper print.</p>
+</header>
+
+<main>
+  <aside>
+    <div class="drop" id="drop">
+      <strong>Upload an image</strong>
+      <span>click, drag &amp; drop, or paste</span>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+
+    <div class="ctl"><label>Dot size <output id="o-cell"></output></label>
+      <input type="range" id="cell" min="2" max="16" step="0.5" value="5"></div>
+    <div class="ctl"><label>Screen angle <output id="o-angle"></output></label>
+      <input type="range" id="angle" min="0" max="90" step="1" value="45"></div>
+    <div class="ctl"><label>Brightness <output id="o-bright"></output></label>
+      <input type="range" id="bright" min="-60" max="60" step="1" value="0"></div>
+    <div class="ctl"><label>Contrast <output id="o-contrast"></output></label>
+      <input type="range" id="contrast" min="0" max="150" step="1" value="45"></div>
+    <div class="ctl"><label>Midtones (gamma) <output id="o-gamma"></output></label>
+      <input type="range" id="gamma" min="0.4" max="2.2" step="0.05" value="1"></div>
+    <div class="ctl"><label>Sharpen <output id="o-sharp"></output></label>
+      <input type="range" id="sharp" min="0" max="3" step="0.1" value="1.2"></div>
+    <div class="ctl"><label>Ink grain <output id="o-grain"></output></label>
+      <input type="range" id="grain" min="0" max="0.6" step="0.01" value="0.18"></div>
+    <div class="ctl"><label>Output width <output id="o-width"></output></label>
+      <input type="range" id="width" min="400" max="2400" step="50" value="1200"></div>
+
+    <hr>
+    <label class="check"><input type="checkbox" id="caption" checked> Caption</label>
+    <div class="ctl"><input type="text" id="captionText" value="‘THE CHOSEN ONE’" spellcheck="false"></div>
+    <div class="ctl"><label>Caption size <output id="o-capsize"></output></label>
+      <input type="range" id="capsize" min="3" max="14" step="0.25" value="7.5"></div>
+    <label class="check"><input type="checkbox" id="rule" checked> Rule under caption</label>
+    <hr>
+
+    <label class="check"><input type="checkbox" id="auto" checked> Auto levels</label>
+    <label class="check"><input type="checkbox" id="border" checked> Black frame</label>
+    <label class="check"><input type="checkbox" id="newsprint"> Newsprint paper tone</label>
+
+    <hr>
+    <div class="row">
+      <button class="ghost" id="compare" disabled>Hold: original</button>
+      <button id="download" disabled>Download PNG</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" id="reset">Reset settings</button>
+    </div>
+  </aside>
+
+  <section class="stage" id="stage">
+    <div class="empty" id="empty">Your print will appear here.</div>
+    <canvas id="out" hidden></canvas>
+    <canvas id="orig" class="compare"></canvas>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const ctlIds = ["cell","angle","bright","contrast","gamma","sharp","grain","width","capsize"];
+const defaultCaption = $("captionText").value;
+const defaults = Object.fromEntries(ctlIds.map(id => [id, $(id).value]));
+const fmt = {
+  cell: v => v + "px", angle: v => v + "°", bright: v => v, contrast: v => v,
+  gamma: v => (+v).toFixed(2), sharp: v => (+v).toFixed(1), grain: v => (+v).toFixed(2), width: v => v + "px",
+  capsize: v => (+v).toFixed(2) + "%",
+};
+let srcImg = null;
+let timer = null;
+
+function updateLabels() {
+  for (const id of ctlIds) $("o-" + id).textContent = fmt[id]($(id).value);
+}
+
+function schedule() {
+  updateLabels();
+  clearTimeout(timer);
+  timer = setTimeout(render, 60);
+}
+
+ctlIds.forEach(id => $(id).addEventListener("input", schedule));
+["auto","border","newsprint","caption","rule"].forEach(id => $(id).addEventListener("change", schedule));
+$("captionText").addEventListener("input", schedule);
+// make sure the caption font is ready before drawing to canvas
+document.fonts.load('700 64px "Old Standard TT"').then(schedule).catch(() => {});
+
+$("reset").onclick = () => {
+  ctlIds.forEach(id => $(id).value = defaults[id]);
+  $("auto").checked = true; $("border").checked = true; $("newsprint").checked = false;
+  $("caption").checked = true; $("rule").checked = true; $("captionText").value = defaultCaption;
+  schedule();
+};
+
+// ---------- loading ----------
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+$("file").onchange = e => e.target.files[0] && load(e.target.files[0]);
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => {
+  e.preventDefault(); drop.classList.remove("over");
+  const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith("image/"));
+  if (f) load(f);
+});
+document.addEventListener("paste", e => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (item) load(item.getAsFile());
+});
+
+function load(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    srcImg = img;
+    $("empty").hidden = true;
+    $("out").hidden = false;
+    $("download").disabled = false;
+    $("compare").disabled = false;
+    // default output width: native width clamped to slider range
+    const w = Math.max(400, Math.min(2400, Math.round(img.naturalWidth / 50) * 50));
+    $("width").value = Math.min(w, 1600);
+    schedule();
+  };
+  img.src = url;
+}
+
+// ---------- processing ----------
+function boxBlur(src, w, h, r) {
+  const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+  const n = 2 * r + 1;
+  for (let y = 0; y < h; y++) {
+    let acc = 0; const row = y * w;
+    for (let x = -r; x <= r; x++) acc += src[row + Math.min(w - 1, Math.max(0, x))];
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = acc / n;
+      acc += src[row + Math.min(w - 1, x + r + 1)] - src[row + Math.max(0, x - r)];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let y = -r; y <= r; y++) acc += tmp[Math.min(h - 1, Math.max(0, y)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = acc / n;
+      acc += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x];
+    }
+  }
+  return out;
+}
+
+// cheap deterministic hash noise so the grain doesn't flicker between renders
+function hash(x, y) {
+  let h = (x * 374761393 + y * 668265263) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+function render() {
+  if (!srcImg) return;
+  const v = id => parseFloat($(id).value);
+  const W = Math.round(v("width"));
+  const H = Math.round(W * srcImg.naturalHeight / srcImg.naturalWidth);
+
+  // draw source at output size
+  const orig = $("orig");
+  orig.width = W; orig.height = H;
+  const octx = orig.getContext("2d", { willReadFrequently: true });
+  octx.imageSmoothingQuality = "high";
+  octx.drawImage(srcImg, 0, 0, W, H);
+  const data = octx.getImageData(0, 0, W, H).data;
+
+  // luminance 0..1
+  const N = W * H;
+  let g = new Float32Array(N);
+  for (let i = 0, j = 0; i < N; i++, j += 4) {
+    g[i] = (0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2]) / 255;
+  }
+
+  // unsharp mask: punches up edges like an over-processed wire photo
+  const sharp = v("sharp");
+  if (sharp > 0) {
+    const r = Math.max(1, Math.round(v("cell") / 2));
+    const b = boxBlur(g, W, H, r);
+    for (let i = 0; i < N; i++) g[i] = g[i] + sharp * (g[i] - b[i]);
+  }
+
+  // auto levels (1st/99th percentile)
+  let lo = 0, hi = 1;
+  if ($("auto").checked) {
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < N; i++) hist[Math.max(0, Math.min(255, (g[i] * 255) | 0))]++;
+    let acc = 0, loT = N * 0.01, hiT = N * 0.99;
+    lo = -1;
+    for (let k = 0; k < 256; k++) {
+      acc += hist[k];
+      if (lo < 0 && acc >= loT) lo = k / 255;
+      if (acc >= hiT) { hi = k / 255; break; }
+    }
+    if (hi - lo < 0.05) { lo = 0; hi = 1; }
+  }
+
+  const bright = v("bright") / 100;
+  const c = v("contrast");
+  const cf = (259 * (c * 2.55 + 255)) / (255 * (259 - c * 2.55)); // classic contrast curve
+  const gamma = v("gamma");
+  const grain = v("grain");
+  const cell = v("cell");
+  const ang = v("angle") * Math.PI / 180;
+  const cs = Math.cos(ang) / cell, sn = Math.sin(ang) / cell;
+  const TAU = Math.PI * 2;
+
+  const paper = $("newsprint").checked ? [236, 231, 218] : [255, 255, 255];
+  const ink = $("newsprint").checked ? [22, 20, 18] : [0, 0, 0];
+
+  const ht = document.createElement("canvas");
+  ht.width = W; ht.height = H;
+  const ctx = ht.getContext("2d");
+  const img = ctx.createImageData(W, H);
+  const o = img.data;
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      let l = (g[i] - lo) / (hi - lo);
+      l = (l - 0.5) * cf + 0.5 + bright;
+      l = Math.min(1, Math.max(0, l));
+      l = Math.pow(l, gamma);
+      const dark = 1 - l;
+
+      // rotated round-dot AM screen
+      const u = x * cs + y * sn;
+      const w = -x * sn + y * cs;
+      const spot = (Math.cos(TAU * u) + Math.cos(TAU * w)) * 0.25 + 0.5; // 1 at dot centre
+      let t = 1 - spot;
+      t += (hash(x, y) - 0.5) * grain;                     // fine ink speckle
+      t += (hash(x >> 2, y >> 2) - 0.5) * grain * 0.6;     // coarser paper mottling
+
+      const on = dark > t;
+      const col = on ? ink : paper;
+      const j = i * 4;
+      o[j] = col[0]; o[j + 1] = col[1]; o[j + 2] = col[2]; o[j + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  if ($("border").checked) {
+    const bw = Math.max(2, Math.round(W / 300));
+    ctx.fillStyle = `rgb(${ink.join(",")})`;
+    ctx.fillRect(0, 0, W, bw); ctx.fillRect(0, H - bw, W, bw);
+    ctx.fillRect(0, 0, bw, H); ctx.fillRect(W - bw, 0, bw, H);
+  }
+
+  compose(ht, W, H, paper, ink, grain);
+}
+
+// Lay out the print: halftone on top, caption + short rule below, on a paper margin.
+function compose(ht, W, H, paper, ink, grain) {
+  const out = $("out");
+  const text = $("captionText").value.trim();
+  const withCaption = $("caption").checked && text.length > 0;
+
+  if (!withCaption) {
+    out.width = W; out.height = H;
+    out.getContext("2d").drawImage(ht, 0, 0);
+    return;
+  }
+
+  const pad = Math.round(W * 0.075);
+  const fontPx = Math.round(W * parseFloat($("capsize").value) / 100);
+  const gap = Math.round(fontPx * 0.75);
+  const withRule = $("rule").checked;
+  const ruleH = Math.max(2, Math.round(fontPx * 0.06));
+  const ruleGap = Math.round(fontPx * 0.55);
+  const capH = Math.round(fontPx * 1.05);
+
+  const OW = W + pad * 2;
+  const OH = pad + H + gap + capH + (withRule ? ruleGap + ruleH : 0) + pad;
+
+  // caption drawn on its own layer so it can be roughened like letterpress ink
+  const layer = document.createElement("canvas");
+  layer.width = OW; layer.height = OH;
+  const lc = layer.getContext("2d", { willReadFrequently: true });
+  let size = fontPx;
+  lc.font = `700 ${size}px "Old Standard TT", Georgia, serif`;
+  const maxW = W;
+  const measured = lc.measureText(text).width;
+  if (measured > maxW) {
+    size = Math.floor(size * maxW / measured);
+    lc.font = `700 ${size}px "Old Standard TT", Georgia, serif`;
+  }
+  lc.fillStyle = "#000";
+  lc.textAlign = "center";
+  lc.textBaseline = "alphabetic";
+  const baseline = pad + H + gap + Math.round(capH * 0.82);
+  lc.fillText(text, OW / 2, baseline);
+  if (withRule) {
+    const rw = Math.round(W * 0.15);
+    lc.fillRect(Math.round(OW / 2 - rw / 2), pad + H + gap + capH + ruleGap, rw, ruleH);
+  }
+
+  // threshold the anti-aliased text with grain → crisp but slightly ragged edges
+  const ld = lc.getImageData(0, 0, OW, OH);
+  const a = ld.data;
+  const final = new ImageData(OW, OH);
+  const f = final.data;
+  for (let y = 0, i = 0; y < OH; y++) {
+    for (let x = 0; x < OW; x++, i += 4) {
+      const alpha = a[i + 3] / 255;
+      const t = 0.5 + (hash(x + 9173, y + 331) - 0.5) * grain * 1.2;
+      const col = alpha > t ? ink : paper;
+      f[i] = col[0]; f[i + 1] = col[1]; f[i + 2] = col[2]; f[i + 3] = 255;
+    }
+  }
+
+  out.width = OW; out.height = OH;
+  const octx = out.getContext("2d");
+  octx.putImageData(final, 0, 0);
+  octx.drawImage(ht, pad, pad);
+}
+
+// ---------- compare & download ----------
+const stage = $("stage");
+const show = on => srcImg && stage.classList.toggle("showing-original", on);
+$("compare").addEventListener("pointerdown", () => show(true));
+["pointerup","pointerleave","pointercancel"].forEach(ev => $("compare").addEventListener(ev, () => show(false)));
+
+$("download").onclick = () => {
+  $("out").toBlob(b => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = "halftone.png";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }, "image/png");
+};
+
+updateLabels();
+</script>
+</body>
+</html>
